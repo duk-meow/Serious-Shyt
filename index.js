@@ -56,7 +56,7 @@ function pushToGit(formattedDate) {
 
 console.log("🚀 GitCron started - will update every day at 3:51 AM and 11:51 PM");
 
-cron.schedule("51 3,23 * * *", () => {
+cron.schedule("* * * * *", () => {
   console.log("⏰ Running scheduled task...");
   updateFile();
 });
