@@ -4,44 +4,62 @@ permissions:
   contents: write
 
 on:
+  workflow_dispatch:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '0 15 * * *'     # 3 PM UTC
-    - cron: '0 20 * * *'     # 8 PM UTC
-    - cron: '30 14 * * *'    # 8 PM IST (14:30 UTC)
-    - cron: '30 15 * * *'    # 9 PM IST (15:30 UTC)
+    - cron: '0 15 * * *'
+    - cron: '0 20 * * *'
+    - cron: '30 14 * * *'
+    - cron: '30 16 * * *'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
     strategy:
       matrix:
         node-version: [18.x, 20.x, 22.x]
-
+    
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configure Git for pushing (YOUR account)
+        with:
+          token: ${{ secrets.PAT_TOKEN }}
+          persist-credentials: true
+      
+      - name: Configure Git Identity
         run: |
-          git config --global user.name "duk-meow"
-          git config --global user.email "insanetomm@gmail.com"
-          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
-
+          git config user.name "duk-meow"
+          git config user.email "insanetomm@gmail.com"
+      
+      - name: Configure Git Remote with PAT
+        run: |
+          git remote set-url origin https://duk-meow:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
+      
+      - name: Debug Git Configuration
+        run: |
+          echo "=== Git Configuration ==="
+          echo "Git user.name: $(git config user.name)"
+          echo "Git user.email: $(git config user.email)"
+          echo "=== Git Remote ==="
+          git remote -v
+          echo "=== Current Branch ==="
+          git branch --show-current
+      
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-
-      - run: npm ci
-
-      - run: npm run build --if-present
-
-      - name: Run dev server for 70 seconds
+      
+      - name: Install Dependencies
+        run: npm ci
+      
+      - name: Build Project
+        run: npm run build --if-present
+      
+      - name: Run Dev Server for 70 Seconds
         run: |
           npm run dev &
           DEV_PID=$!
@@ -50,55 +68,25 @@ jobs:
             echo "Dev server running... $i seconds remaining"
             sleep 1
           done
-name: Node.js CI
-
-permissions:
-  contents: write
-
-on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
-  schedule:
-    - cron: '0 15 * * *'     # 3 PM UTC
-    - cron: '0 20 * * *'     # 8 PM UTC
-    - cron: '30 14 * * *'    # 8 PM IST (14:30 UTC)
-    - cron: '30 16 * * *'    # 9 PM IST (15:30 UTC)
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-
-    strategy:
-      matrix:
-        node-version: [18.x, 20.x, 22.x]
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Configure Git for pushing (YOUR account)
+      
+      - name: Check for Changes
+        id: check_changes
         run: |
-          git config --global user.name "duk-meow"
-          git config --global user.email "insanetomm@gmail.com"
-          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
-
-      - name: Use Node.js ${{ matrix.node-version }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ matrix.node-version }}
-          cache: 'npm'
-
-      - run: npm ci
-
-      - run: npm run build --if-present
-
-      - name: Run dev server for 70 seconds
+          git add .
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Changes detected"
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Commit and Push Changes
+        if: steps.check_changes.outputs.has_changes == 'true'
         run: |
-          npm run dev &
-          DEV_PID=$!
-          trap 'kill $DEV_PID || true' EXIT
-          for ((i=70; i>0; i--)); do
-            echo "Dev server running... $i seconds remaining"
-            sleep 1
-          done
+          git commit -m "chore: automated update from Node.js ${{ matrix.node-version }}"
+          git push --force origin HEAD:${{ github.ref_name }}
+      
+      - name: No Changes
+        if: steps.check_changes.outputs.has_changes == 'false'
+        run: echo "✅ No changes to commit"
