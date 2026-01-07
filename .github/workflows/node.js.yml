@@ -1,7 +1,7 @@
 name: Node.js CI
 
 permissions:
-  contents: write # ✅ Needed so GitHub Actions can push changes
+  contents: write
 
 on:
   push:
@@ -25,11 +25,63 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure Git for pushing
+      - name: Configure Git for pushing (YOUR account)
         run: |
           git config --global user.name "duk-meow"
           git config --global user.email "insanetomm@gmail.com"
-          git remote set-url origin https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
+
+      - name: Use Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run build --if-present
+
+      - name: Run dev server for 70 seconds
+        run: |
+          npm run dev &
+          DEV_PID=$!
+          trap 'kill $DEV_PID || true' EXIT
+          for ((i=70; i>0; i--)); do
+            echo "Dev server running... $i seconds remaining"
+            sleep 1
+          done
+name: Node.js CI
+
+permissions:
+  contents: write
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  schedule:
+    - cron: '0 15 * * *'     # 3 PM UTC
+    - cron: '0 20 * * *'     # 8 PM UTC
+    - cron: '30 14 * * *'    # 8 PM IST (14:30 UTC)
+    - cron: '30 16 * * *'    # 9 PM IST (15:30 UTC)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [18.x, 20.x, 22.x]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure Git for pushing (YOUR account)
+        run: |
+          git config --global user.name "duk-meow"
+          git config --global user.email "insanetomm@gmail.com"
+          git remote set-url origin https://x-access-token:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
 
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
