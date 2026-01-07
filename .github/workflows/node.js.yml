@@ -4,16 +4,16 @@ permissions:
   contents: write
 
 on:
-  workflow_dispatch:   # optional manual trigger
+  workflow_dispatch:
   push:
     branches: [ "main" ]
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '0 15 * * *'     # 3 PM UTC
-    - cron: '0 20 * * *'     # 8 PM UTC
-    - cron: '30 14 * * *'    # 8 PM IST (14:30 UTC)
-    - cron: '30 16 * * *'    # 9 PM IST (15:30 UTC)
+    - cron: '0 15 * * *'
+    - cron: '0 20 * * *'
+    - cron: '30 14 * * *'
+    - cron: '30 16 * * *'
 
 jobs:
   build:
@@ -51,3 +51,9 @@ jobs:
             echo "Dev server running... $i seconds remaining"
             sleep 1
           done
+
+      - name: Commit and push changes
+        run: |
+          git add .
+          git diff --cached --quiet || git commit -m "chore: automated update"
+          git push
