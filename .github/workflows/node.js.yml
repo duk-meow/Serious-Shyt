@@ -10,10 +10,8 @@ on:
   pull_request:
     branches: [ "main" ]
   schedule:
-    - cron: '0 15 * * *'
-    - cron: '0 20 * * *'
-    - cron: '30 14 * * *'
-    - cron: '30 16 * * *'
+    - cron: '30 14 * * *'   # 8:00 PM IST
+    - cron: '0 20 * * *'    # 1:30 AM IST
 
 jobs:
   build:
@@ -21,44 +19,34 @@ jobs:
     strategy:
       matrix:
         node-version: [18.x, 20.x, 22.x]
-    
+
     steps:
       - uses: actions/checkout@v4
         with:
           token: ${{ secrets.PAT_TOKEN }}
           persist-credentials: true
-      
+
       - name: Configure Git Identity
         run: |
           git config user.name "duk-meow"
           git config user.email "insanetomm@gmail.com"
-      
+
       - name: Configure Git Remote with PAT
         run: |
           git remote set-url origin https://duk-meow:${{ secrets.PAT_TOKEN }}@github.com/${{ github.repository }}.git
-      
-      - name: Debug Git Configuration
-        run: |
-          echo "=== Git Configuration ==="
-          echo "Git user.name: $(git config user.name)"
-          echo "Git user.email: $(git config user.email)"
-          echo "=== Git Remote ==="
-          git remote -v
-          echo "=== Current Branch ==="
-          git branch --show-current
-      
+
       - name: Use Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
           cache: 'npm'
-      
+
       - name: Install Dependencies
         run: npm ci
-      
+
       - name: Build Project
         run: npm run build --if-present
-      
+
       - name: Run Dev Server for 70 Seconds
         run: |
           npm run dev &
@@ -68,25 +56,24 @@ jobs:
             echo "Dev server running... $i seconds remaining"
             sleep 1
           done
-      
+
       - name: Check for Changes
         id: check_changes
+        if: matrix.node-version == '22.x'
         run: |
           git add .
           if git diff --cached --quiet; then
-            echo "No changes to commit"
             echo "has_changes=false" >> $GITHUB_OUTPUT
           else
-            echo "Changes detected"
             echo "has_changes=true" >> $GITHUB_OUTPUT
           fi
-      
+
       - name: Commit and Push Changes
-        if: steps.check_changes.outputs.has_changes == 'true'
+        if: matrix.node-version == '22.x' && steps.check_changes.outputs.has_changes == 'true'
         run: |
-          git commit -m "chore: automated update from Node.js ${{ matrix.node-version }}"
+          git commit -m "chore: automated update (Node 22)"
           git push --force origin HEAD:${{ github.ref_name }}
-      
+
       - name: No Changes
-        if: steps.check_changes.outputs.has_changes == 'false'
+        if: matrix.node-version == '22.x' && steps.check_changes.outputs.has_changes == 'false'
         run: echo "✅ No changes to commit"
