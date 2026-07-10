@@ -5,14 +5,28 @@ import { promisify } from "util";
 
 const execPromise = promisify(exec);
 
+const GIT_USER_NAME = process.env.GIT_USER_NAME || "duk-meow";
+const GIT_USER_EMAIL = process.env.GIT_USER_EMAIL || "insanetomm@gmail.com";
+const BRANCH = process.env.GIT_BRANCH || "main";
+
+// Logger to handle sensitive information appropriately
+const logger = {
+  info: (message) => console.log(`[INFO] ${message}`),
+  error: (message, error) => {
+    console.error(`[ERROR] ${message}`);
+    // In a real production app, we would log the full error object to a secure,
+    // centralized logging system here. For this exercise, we keep it off console.
+  },
+};
+
 function updateFile() {
   const date = new Date();
   const formattedDate = date.toISOString();
   fs.writeFile("date.txt", `Last run: ${formattedDate}\n`, (err) => {
     if (err) {
-      console.error("❌ Error writing to file:", err);
+      logger.error("Failed to update file.", err);
     } else {
-      console.log("📄 File updated successfully");
+      logger.info("File updated successfully.");
       pushToGit(formattedDate);
     }
   });
@@ -20,31 +34,31 @@ function updateFile() {
 
 async function pushToGit(formattedDate) {
   const message = `chore: automated update - ${formattedDate}`;
-  console.log("🔄 Starting Git operations...");
+  logger.info("Starting Git operations...");
 
   try {
-    // Configure git identity as duk-meow
+    // Configure git identity
     await execPromise(
-      'git config user.name "duk-meow" && git config user.email "insanetomm@gmail.com"'
+      `git config user.name "${GIT_USER_NAME}" && git config user.email "${GIT_USER_EMAIL}"`
     );
-    console.log("✅ Git identity configured as duk-meow");
+    logger.info("Git identity configured.");
 
     // Git add
     await execPromise("git add .");
-    console.log("✅ Git add successful");
+    logger.info("Git add successful.");
 
     // Git commit
     try {
       const { stdout: commitOutput } = await execPromise(
         `git commit -m "${message}"`
       );
-      console.log("✅ Git commit successful:", commitOutput.trim());
+      logger.info("Git commit successful.");
     } catch (commitError) {
       if (
         commitError.message.includes("nothing to commit") ||
         commitError.stderr?.includes("nothing to commit")
       ) {
-        console.log("ℹ️ No changes to commit");
+        logger.info("No changes to commit.");
         return;
       }
       throw commitError;
@@ -52,22 +66,18 @@ async function pushToGit(formattedDate) {
 
     // Pull with rebase before pushing to avoid conflicts
     try {
-      await execPromise("git pull --rebase origin main");
-      console.log("✅ Git pull successful");
+      await execPromise(`git pull --rebase origin ${BRANCH}`);
+      logger.info("Git pull successful.");
     } catch (pullError) {
-      console.log("⚠️ Pull not needed or already up to date");
+      logger.info("Pull not needed or already up to date.");
     }
 
     // Git push
-    const { stdout: pushOutput } = await execPromise("git push origin main");
-    console.log("🚀 Git push complete!");
-    console.log("Push output:", pushOutput);
+    await execPromise(`git push origin ${BRANCH}`);
+    logger.info("Git push complete!");
 
   } catch (error) {
-    console.error("❌ Git operation failed:", error.message);
-    if (error.stderr) {
-      console.error("Error details:", error.stderr);
-    }
+    logger.error("Git operation failed. Internal Server Error.", error);
   }
 }
 
@@ -75,11 +85,11 @@ async function pushToGit(formattedDate) {
 async function initializeGit() {
   try {
     await execPromise(
-      'git config user.name "duk-meow" && git config user.email "insanetomm@gmail.com"'
+      `git config user.name "${GIT_USER_NAME}" && git config user.email "${GIT_USER_EMAIL}"`
     );
-    console.log("✅ Git identity initialized as duk-meow");
+    logger.info("Git identity initialized.");
   } catch (error) {
-    console.error("❌ Failed to initialize git:", error.message);
+    logger.error("Failed to initialize git.", error);
   }
 }
 
@@ -87,10 +97,10 @@ async function initializeGit() {
 await initializeGit();
 
 // Schedule the cron job
-console.log("🚀 GitCron started - Running every minute");
-console.log("📧 Commits will be made by: duk-meow <insanetomm@gmail.com>");
+logger.info("GitCron started - Running every minute");
+logger.info(`Commits will be made by: ${GIT_USER_NAME} <${GIT_USER_EMAIL}>`);
 
 cron.schedule("* * * * *", () => {
-  console.log("⏰ Running scheduled task...");
+  logger.info("Running scheduled task...");
   updateFile();
 });
